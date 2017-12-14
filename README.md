@@ -1,11 +1,10 @@
-####A rest framework based on [gin](https://github.com/gin-gonic/gin)
+#### A rest framework based on [gin](https://github.com/gin-gonic/gin)
 
-####Usage
+#### Usage
 
 See example/main.go
 
-
-####Run example
+#### Run example
 
 [glide](https://glide.sh/) install --strip-vendor
 
