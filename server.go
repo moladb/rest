@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,13 +26,7 @@ func NewServer(config Config) *Server {
 	}
 	if config.EnableMetrics {
 		s.decorateHandler = func(apiGroup, resource string, h gin.HandlerFunc) gin.HandlerFunc {
-			var path string
-			if apiGroup == "" {
-				path = "/" + strings.TrimLeft(resource, "/")
-			} else {
-				path = "/" + strings.Trim(apiGroup, "/") + "/" + strings.TrimLeft(resource, "/")
-			}
-			return ginprom.WithMetrics(path, h)
+			return ginprom.WithMetrics(fullResourcePath(apiGroup, resource), h)
 		}
 	} else {
 		s.decorateHandler = func(_, _ string, h gin.HandlerFunc) gin.HandlerFunc {
@@ -43,29 +36,27 @@ func NewServer(config Config) *Server {
 	return s
 }
 
-func (s *Server) RegisterServiceGroup(svc ServiceGroup) {
-	apiGroup := strings.Trim(svc.GetAPIGroup(), "/")
-	group := s.router.Group("/" + apiGroup)
-	handlers := svc.ListHandlers()
-	for _, h := range handlers {
-		group.Handle(h.Method, "/"+strings.TrimLeft(h.Path, "/"),
-			s.decorateHandler(apiGroup, h.Resource.Name, h.HandlerFunc))
-		s.registry.AddGroupResource(apiGroup, h.Resource)
-	}
+func (s *Server) RegisterService(svc Service) {
+	s.RegisterServiceGroup(DefaultGroup, svc)
 }
 
-func (s *Server) RegisterService(svc Service) {
+func (s *Server) RegisterServiceGroup(group string, svc Service) {
+	group = normalizePath(group)
+	var r gin.IRoutes = s.router
+	if group != DefaultGroup {
+		r = s.router.Group(group)
+	}
 	handlers := svc.ListHandlers()
 	for _, h := range handlers {
-		s.router.Handle(h.Method, "/"+strings.TrimLeft(h.Path, "/"),
-			s.decorateHandler("", h.Resource.Name, h.HandlerFunc))
-		s.registry.AddResource(h.Resource)
+		r.Handle(h.Method, normalizePath(h.Path),
+			s.decorateHandler(group, h.Resource.Name, h.HandlerFunc))
+		s.registry.addGroupResource(group, h.Resource)
 	}
 }
 
 func (s *Server) Run() error {
 	if s.config.EnableDebug {
-		s.RegisterServiceGroup(newPProfService())
+		s.RegisterServiceGroup("/debug", newPProfService())
 	}
 	if s.config.EnableMetrics {
 		s.RegisterService(newMetricsService())

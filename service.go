@@ -2,7 +2,7 @@ package rest
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 
 	"net/http"
 	"net/http/pprof"
@@ -11,6 +11,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const DefaultGroup = "/"
+
 type Handler struct {
 	Resource
 	HandlerFunc gin.HandlerFunc
@@ -18,11 +20,6 @@ type Handler struct {
 
 type Service interface {
 	ListHandlers() []Handler
-}
-
-type ServiceGroup interface {
-	Service
-	GetAPIGroup() string
 }
 
 //func validateService(svc Service) error {
@@ -56,15 +53,6 @@ func newServiceRegistry() *serviceRegistry {
 	}
 }
 
-func (r *serviceRegistry) AddGroupResource(group string, res Resource) {
-	group = strings.Trim(group, "/")
-	r.addGroupResource(group, res)
-}
-
-func (r *serviceRegistry) AddResource(res Resource) {
-	r.addGroupResource("/", res)
-}
-
 func (r *serviceRegistry) addGroupResource(group string, res Resource) {
 	apiGroup, ok := r.apiGroups[group]
 	if !ok {
@@ -74,26 +62,19 @@ func (r *serviceRegistry) addGroupResource(group string, res Resource) {
 	r.apiGroups[group] = apiGroup
 }
 
-func (r *serviceRegistry) ListAPIGroups() []string {
+func (r *serviceRegistry) listAPIGroups() []string {
 	names := []string{}
 	for k := range r.apiGroups {
 		names = append(names, k)
 	}
+	sort.Sort(sort.StringSlice(names))
 	return names
 }
 
-func (r *serviceRegistry) ListGroupResources(apiGroup string) (APIGroup, bool) {
-	apiGroup = strings.Trim(apiGroup, "/")
+func (r *serviceRegistry) listGroupResources(apiGroup string) (APIGroup, bool) {
+	apiGroup = normalizePath(apiGroup)
 	g, ok := r.apiGroups[apiGroup]
 	return g, ok
-}
-
-func (r *serviceRegistry) ListResources() []Resource {
-	g, ok := r.apiGroups["/"]
-	if !ok {
-		return []Resource{}
-	}
-	return g.Resources
 }
 
 type discoveryService struct {
@@ -115,7 +96,7 @@ func (s *discoveryService) ListHandlers() []Handler {
 			HandlerFunc: func(c *gin.Context) {
 				c.JSON(http.StatusOK,
 					gin.H{
-						"apis": s.registry.ListAPIGroups(),
+						"apis": s.registry.listAPIGroups(),
 					})
 			},
 		},
@@ -126,7 +107,8 @@ func (s *discoveryService) ListHandlers() []Handler {
 				Method: "GET",
 			},
 			HandlerFunc: func(c *gin.Context) {
-				c.JSON(http.StatusOK, s.registry.ListResources())
+				rs, _ := s.registry.listGroupResources("/")
+				c.JSON(http.StatusOK, rs)
 			},
 		},
 		{
@@ -137,7 +119,7 @@ func (s *discoveryService) ListHandlers() []Handler {
 			},
 			HandlerFunc: func(c *gin.Context) {
 				apiGroup := c.Param("apigroup")
-				rs, ok := s.registry.ListGroupResources(apiGroup)
+				rs, ok := s.registry.listGroupResources(apiGroup)
 				if !ok {
 					c.JSON(http.StatusNotFound,
 						gin.H{
@@ -157,15 +139,11 @@ func newPProfService() *pprofService {
 	return &pprofService{}
 }
 
-func (s *pprofService) GetAPIGroup() string {
-	return "debug"
-}
-
 func (s *pprofService) ListHandlers() []Handler {
 	return []Handler{
 		{
 			Resource: Resource{
-				Name:   "pprof",
+				Name:   "/pprof",
 				Path:   "/pprof",
 				Method: "GET",
 			},

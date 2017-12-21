@@ -60,8 +60,8 @@ func main() {
 		})
 
 		// register services
-		srv.RegisterServiceGroup(v0.NewKVService())
-		srv.RegisterServiceGroup(v1.NewKVService())
+		srv.RegisterServiceGroup("v0", v0.NewKVService())
+		srv.RegisterServiceGroup("v1", v1.NewKVService())
 
 		go func() {
 			quit := make(chan os.Signal, 1)
