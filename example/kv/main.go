@@ -22,8 +22,8 @@ import (
 	"os/signal"
 
 	"github.com/moladb/rest"
-	"github.com/moladb/rest/example/kv-service/v0"
-	"github.com/moladb/rest/example/kv-service/v1"
+	"github.com/moladb/rest/example/kv/kv-service/v0"
+	"github.com/moladb/rest/example/kv/kv-service/v1"
 	"github.com/urfave/cli"
 )
 
